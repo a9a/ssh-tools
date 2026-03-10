@@ -42,10 +42,17 @@ host = "192.168.1.10"
 user = "dev"
 port = 22
 identity_file = "~/.ssh/id_ed25519"
-options = ["StrictHostKeyChecking=accept-new"]
+options = []
 ```
 
 `id` is optional but recommended for fast filtering and stable shortcuts.
+`options` is optional; prefer strict SSH options in security-sensitive environments.
+
+## Security Notes
+
+- on Unix, config file is created with `0600` permissions
+- the app rejects config files writable by group/others
+- the app rejects config files not owned by current user (or root)
 
 ## Tests
 

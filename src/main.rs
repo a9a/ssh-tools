@@ -19,6 +19,7 @@ enum CliCommand {
     Interactive,
     List,
     Connect(String),
+    Help,
 }
 
 fn main() -> ExitCode {
@@ -46,6 +47,10 @@ fn run() -> Result<(), String> {
     let config = load_config(&config_path).map_err(|e| e.to_string())?;
 
     match command {
+        CliCommand::Help => {
+            println!("{USAGE}");
+            return Ok(());
+        }
         CliCommand::List => {
             print_connections(&config.connections);
             return Ok(());
@@ -57,7 +62,6 @@ fn run() -> Result<(), String> {
         CliCommand::Interactive => {}
     }
 
-    print_connections(&config.connections);
     let choice = select_connection_tui(&config.connections)?;
     let selected = &config.connections[choice];
     connect(selected)
@@ -94,7 +98,7 @@ fn parse_cli_args(args: Vec<String>) -> Result<CliCommand, String> {
                 Ok(CliCommand::Connect(name.clone()))
             }
         }
-        [flag] if flag == "--help" || flag == "-h" => Err(USAGE.to_string()),
+        [flag] if flag == "--help" || flag == "-h" => Ok(CliCommand::Help),
         _ => Err(format!("invalid arguments\n\n{USAGE}")),
     }
 }
@@ -122,5 +126,11 @@ mod tests {
     #[test]
     fn rejects_unknown_arguments() {
         assert!(parse_cli_args(vec!["--unknown".to_string()]).is_err());
+    }
+
+    #[test]
+    fn parses_help_command() {
+        let command = parse_cli_args(vec!["--help".to_string()]).expect("expected --help to parse");
+        assert!(matches!(command, CliCommand::Help));
     }
 }

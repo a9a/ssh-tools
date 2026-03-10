@@ -3,6 +3,7 @@ use std::env;
 use std::error::Error;
 use std::fmt::{Display, Formatter};
 use std::fs;
+use std::io::Write;
 use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
@@ -19,7 +20,7 @@ host = "192.168.1.10"
 user = "dev"
 port = 22
 identity_file = "~/.ssh/id_ed25519"
-options = ["StrictHostKeyChecking=accept-new"]
+options = []
 
 [[connections]]
 id = "prod"
@@ -123,15 +124,74 @@ pub fn ensure_config_exists(path: &Path) -> Result<bool, ConfigError> {
         fs::create_dir_all(parent)?;
     }
 
-    fs::write(path, DEFAULT_CONFIG_TEMPLATE)?;
+    write_default_config(path)?;
     Ok(true)
 }
 
 pub fn load_config(path: &Path) -> Result<AppConfig, ConfigError> {
+    verify_config_security(path)?;
     let raw = fs::read_to_string(path)?;
     let parsed: AppConfig = toml::from_str(&raw)?;
     validate_config(&parsed)?;
     Ok(parsed)
+}
+
+fn write_default_config(path: &Path) -> Result<(), ConfigError> {
+    #[cfg(unix)]
+    {
+        use std::fs::OpenOptions;
+        use std::os::unix::fs::OpenOptionsExt;
+
+        let mut file = OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .mode(0o600)
+            .open(path)?;
+        file.write_all(DEFAULT_CONFIG_TEMPLATE.as_bytes())?;
+        Ok(())
+    }
+
+    #[cfg(not(unix))]
+    {
+        fs::write(path, DEFAULT_CONFIG_TEMPLATE)?;
+        Ok(())
+    }
+}
+
+fn verify_config_security(path: &Path) -> Result<(), ConfigError> {
+    let metadata = fs::metadata(path)?;
+    if !metadata.is_file() {
+        return Err(ConfigError::Validation(format!(
+            "config path '{}' must point to a regular file",
+            path.display()
+        )));
+    }
+
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::MetadataExt;
+
+        let mode = metadata.mode();
+        if mode & 0o022 != 0 {
+            return Err(ConfigError::Validation(format!(
+                "config '{}' is writable by group/others; run chmod 600",
+                path.display()
+            )));
+        }
+
+        let uid = metadata.uid();
+        // SAFETY: `geteuid` has no preconditions and returns effective user id of current process.
+        let euid = unsafe { libc::geteuid() };
+
+        if uid != euid && uid != 0 {
+            return Err(ConfigError::Validation(format!(
+                "config '{}' must be owned by the current user (or root)",
+                path.display()
+            )));
+        }
+    }
+
+    Ok(())
 }
 
 pub fn validate_config(config: &AppConfig) -> Result<(), ConfigError> {
@@ -187,7 +247,7 @@ pub fn validate_config(config: &AppConfig) -> Result<(), ConfigError> {
 
 #[cfg(test)]
 mod tests {
-    use super::{AppConfig, Connection, validate_config};
+    use super::{AppConfig, Connection, ensure_config_exists, load_config, validate_config};
     use std::path::PathBuf;
 
     #[test]
@@ -278,5 +338,67 @@ mod tests {
         };
 
         assert!(validate_config(&config).is_err());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn rejects_world_writable_config() {
+        use std::fs;
+        use std::os::unix::fs::PermissionsExt;
+        use std::time::{SystemTime, UNIX_EPOCH};
+
+        let unique = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("system time should be after epoch")
+            .as_nanos();
+        let dir = std::env::temp_dir().join(format!("ssh-qc-test-{unique}"));
+        fs::create_dir_all(&dir).expect("failed to create temp dir");
+        let config_path = dir.join("config.toml");
+        fs::write(
+            &config_path,
+            r#"[[connections]]
+id = "dev"
+name = "dev"
+host = "localhost"
+"#,
+        )
+        .expect("failed to write config");
+        fs::set_permissions(&config_path, fs::Permissions::from_mode(0o666))
+            .expect("failed to set file perms");
+
+        let result = load_config(&config_path);
+        assert!(result.is_err());
+
+        let _ = fs::remove_file(&config_path);
+        let _ = fs::remove_dir(&dir);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn creates_default_config_with_0600_permissions() {
+        use std::fs;
+        use std::os::unix::fs::PermissionsExt;
+        use std::time::{SystemTime, UNIX_EPOCH};
+
+        let unique = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("system time should be after epoch")
+            .as_nanos();
+        let dir = std::env::temp_dir().join(format!("ssh-qc-create-{unique}"));
+        fs::create_dir_all(&dir).expect("failed to create temp dir");
+        let config_path = dir.join("config.toml");
+
+        let created = ensure_config_exists(&config_path).expect("expected config to be created");
+        assert!(created);
+
+        let mode = fs::metadata(&config_path)
+            .expect("metadata should exist")
+            .permissions()
+            .mode()
+            & 0o777;
+        assert_eq!(mode, 0o600);
+
+        let _ = fs::remove_file(&config_path);
+        let _ = fs::remove_dir(&dir);
     }
 }

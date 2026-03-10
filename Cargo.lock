@@ -299,6 +299,7 @@ name = "ssh-quick-connect"
 version = "0.1.0"
 dependencies = [
  "dialoguer",
+ "libc",
  "serde",
  "toml",
 ]
