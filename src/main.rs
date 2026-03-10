@@ -76,7 +76,10 @@ fn select_connection<'a>(
 }
 
 fn connect(connection: &Connection) -> Result<(), String> {
-    println!("Connecting to '{}' ({})...", connection.name, connection.host);
+    println!(
+        "Connecting to '{}' ({})...",
+        connection.name, connection.host
+    );
 
     let status = run_ssh(connection).map_err(|err| {
         format!("failed to start ssh process (is 'ssh' available in PATH?): {err}")

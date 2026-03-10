@@ -4,11 +4,7 @@ use dialoguer::{FuzzySelect, theme::ColorfulTheme};
 pub fn print_connections(connections: &[Connection]) {
     println!("Available SSH connections:");
     for (idx, connection) in connections.iter().enumerate() {
-        println!(
-            "  {}. {}",
-            idx + 1,
-            render_connection_label(connection)
-        );
+        println!("  {}. {}", idx + 1, render_connection_label(connection));
     }
 }
 
@@ -47,10 +43,9 @@ pub fn find_connection(query: &str, connections: &[Connection]) -> Result<usize,
         .iter()
         .enumerate()
         .filter_map(|(idx, c)| {
-            let id_match = c
-                .id
-                .as_ref()
-                .is_some_and(|id| id.to_lowercase().contains(&query_lower));
+            let id_match =
+                c.id.as_ref()
+                    .is_some_and(|id| id.to_lowercase().contains(&query_lower));
             let name_match = c.name.to_lowercase().contains(&query_lower);
             let host_match = c.host.to_lowercase().contains(&query_lower);
             if id_match || name_match || host_match {
@@ -189,7 +184,10 @@ mod tests {
             identity_file: None,
             options: vec![],
         };
-        assert_eq!(render_connection_label(&connection), "prod-api (api.example.com)");
+        assert_eq!(
+            render_connection_label(&connection),
+            "prod-api (api.example.com)"
+        );
     }
 
     #[test]
