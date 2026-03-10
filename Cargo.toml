@@ -1,0 +1,9 @@
+[package]
+name = "ssh-quick-connect"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+dialoguer = { version = "0.12", features = ["fuzzy-select"] }
+serde = { version = "1.0", features = ["derive"] }
+toml = "0.9"

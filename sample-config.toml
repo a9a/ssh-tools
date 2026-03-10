@@ -1,0 +1,16 @@
+# ssh-quick-connect configuration
+# Add as many machines as you need.
+
+[[connections]]
+name = "dev-server"
+host = "192.168.1.10"
+user = "dev"
+port = 22
+identity_file = "~/.ssh/id_ed25519"
+options = ["StrictHostKeyChecking=accept-new"]
+
+[[connections]]
+name = "prod-jump"
+host = "jump.example.com"
+user = "ops"
+options = ["ServerAliveInterval=30", "ServerAliveCountMax=3"]
